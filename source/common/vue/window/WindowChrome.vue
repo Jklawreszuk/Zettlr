@@ -308,6 +308,11 @@ body {
     position: relative;
   }
 
+  // Workaround Graph tab for Writing statistics
+  #window-content:has(#tab-graph) {
+    overflow: hidden;
+  }
+
   &:not(.darwin) {
     div#window-content {
       background-color: #fafafa;
