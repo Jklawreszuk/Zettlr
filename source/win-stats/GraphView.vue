@@ -15,9 +15,8 @@
       ></Checkbox>
       <ButtonElement
         v-bind:icon="'target'"
-        v-bind:disabled="offsetX === 0 && offsetY === 0"
         v-bind:inline="true"
-        v-on:click="offsetX = 0; offsetY = 0"
+        v-on:click="setCenter()"
       ></ButtonElement>
       <SelectElement
         v-model="componentFilter"
@@ -74,12 +73,9 @@ const includeIsolates = ref(true)
 const showLabels = ref(true)
 // These two variables are required to enable scrolling, they mark an
 // offset to which the viewport will be relatively positioned
-const offsetX = ref(0)
-const offsetY = ref(0)
 const graphWidth = ref(0)
 const graphHeight = ref(0)
-// This variable contains zoom information
-const zoomFactor = ref(1)
+const radius = ref(5)
 // Store the D3 elements
 const graphElement = ref<d3.Selection<SVGSVGElement, undefined, null, undefined>|null>(null)
 const simulation = ref<d3.Simulation<d3.SimulationNodeDatum, undefined>|null>(null)
@@ -105,10 +101,10 @@ const selectableComponents = computed(() => {
 const containerElement = ref<HTMLDivElement|null>(null)
 const controlsElement = ref<HTMLDivElement|null>(null)
 const graphViewBox = computed<[number, number, number, number]>(() => {
-  const width = graphWidth.value * zoomFactor.value
-  const height = graphHeight.value * zoomFactor.value
-  const left = -width / 2 + offsetX.value
-  const top = -height / 2 + offsetY.value
+  const width = graphWidth.value
+  const height = graphHeight.value
+  const left = -width / 2
+  const top = -height / 2
   return [ left, top, width, height ]
 })
 
@@ -139,9 +135,6 @@ watch(highlightFilter, () => {
       .select('circle')
       .attr('class', null)
       .attr('opacity', null)
-
-    offsetX.value = 0
-    offsetY.value = 0
     return
   }
 
@@ -162,8 +155,6 @@ watch(highlightFilter, () => {
   nonmatches.attr('class', null).attr('opacity', '0.2')
 
   if (matches.size() === 0) {
-    offsetX.value = 0
-    offsetY.value = 0
     return // Nothing more to do
   }
 
@@ -176,10 +167,6 @@ watch(highlightFilter, () => {
     Y.push(datum.y as number)
   })
 
-  const meanX = X.reduce((prev, curr) => prev + curr, 0) / X.length
-  const meanY = Y.reduce((prev, curr) => prev + curr, 0) / Y.length
-  offsetX.value = meanX
-  offsetY.value = meanY
 })
 
 onMounted(() => {
@@ -197,13 +184,13 @@ onMounted(() => {
 
   // Let's create a link-container as an SVG group to add some default
   // attributes to the individual links
-  graphElement.value.append('g')
+  const link = graphElement.value.append('g')
     .attr('id', 'arc-container')
     .attr('stroke', '#999') // Color
     .attr('stroke-opacity', 0.6) // Opacity
     .attr('stroke-linecap', 'round')
   // The same for nodes
-  graphElement.value.append('g')
+  const node = graphElement.value.append('g')
     .attr('id', 'vertex-container')
     .attr('fill', '#36f')
     .attr('stroke', '#fff')
@@ -211,40 +198,13 @@ onMounted(() => {
     .attr('stroke-width', 1.5)
     .attr('style', 'cursor: pointer; outline: none')
 
-  // Hook into the zoom behavior, and misuse the wheel-event emitted by it in
-  // order to reposition the center of the viewport
-  graphElement.value.call(d3.zoom<SVGSVGElement, any>())
-    .on('wheel.zoom', (event: WheelEvent) => {
-      if (containerElement.value === null) {
-        return
-      }
-
-      // What we do here is take the cursor offset from the container center
-      // as well as the SVG offset and also move the SVG based on where the
-      // cursor is. This mimics somewhat the Google Maps approach to always
-      // also move the map ever so slightly towards wherever the cursor is
-      // pointing. But the behavior can certainly be improved I guess.
-      const containerRect = containerElement.value.getBoundingClientRect()
-      const cursorY = event.clientY - containerRect.y
-      const cursorX = event.clientX - containerRect.x
-      const centerContainerX = containerRect.width / 2
-      const centerContainerY = containerRect.height / 2
-      const centerSVGX = offsetX.value
-      const centerSVGY = offsetY.value
-      const cursorOffsetX = cursorX - centerContainerX
-      const cursorOffsetY = cursorY - centerContainerY
-      const scalingFactor = 0.1 / zoomFactor.value
-
-      if (event.deltaY < 0) {
-        offsetX.value += (cursorOffsetX - centerSVGX) * scalingFactor
-        offsetY.value += (cursorOffsetY - centerSVGY) * scalingFactor
-      }
-
-      zoomFactor.value += (event.deltaY > 0) ? 0.1 : -0.1
-      if (zoomFactor.value < 0.1) {
-        zoomFactor.value = 0.1
-      }
-    })
+  graphElement.value.call(d3.zoom<SVGSVGElement, any>()
+    .extent([ [ 0 , 0 ], [ graphWidth.value, graphHeight.value ] ])
+    .scaleExtent([ 1, 8 ])
+    .on('zoom', function ({ transform }) {
+      node.attr('transform', transform)
+      link.attr('transform', transform)
+    }))
 
   const graphElementNode = graphElement.value.node()
   if (graphElementNode !== null) {
@@ -266,6 +226,10 @@ onBeforeUnmount(() => {
   }
 })
 
+function setCenter (): void {
+  
+}
+
 /**
  * This callback is called whenever the size of the controls element changes
  */
@@ -273,10 +237,6 @@ function updateGraphSize (): void {
   if (controlsElement.value === null || containerElement.value === null) {
     return
   }
-
-  const controlsHeight = controlsElement.value.getBoundingClientRect().height
-  const padValue = 20 // Twice the padding applied to the graph container
-  containerElement.value.style.top = `${controlsHeight + padValue}px`
 
   const { width, height } = containerElement.value.getBoundingClientRect()
   graphWidth.value = width
@@ -368,7 +328,10 @@ function startSimulation (): void {
     simulation.value = d3.forceSimulation(includedNodes as any)
       .force('link', forceLink)
       .force('charge', d3.forceManyBody())
-      .force('collide', d3.forceCollide(5))
+      .force('collide', d3.forceCollide((d: any) => {
+        const labelLength = (d.label ?? d.id).length
+        return radius.value + labelLength * 2 // Text should not overay each other
+      }))
       .force('x', d3.forceX())
       .force('y', d3.forceY())
       .on('tick', function () {
@@ -385,8 +348,8 @@ function startSimulation (): void {
 
         svg.selectAll('#vertex-container g')
           .select('text')
-          .attr('x', (d: any) => d.x + 5) // NOTE: 5 is here the radius!
-          .attr('y', (d: any) => d.y - 5)
+          .attr('x', (d: any) => d.x + radius.value)
+          .attr('y', (d: any) => d.y - radius.value)
       })
   } else {
     // If the simulation already exists, we can simply update it
@@ -424,7 +387,7 @@ function startSimulation (): void {
 
         groupSelection
           .append('circle')
-          .attr('r', 5)
+          .attr('r', radius.value)
           .attr('fill', (vertex, _value) => (vertex.isolate) ? color(ISOLATES_CLASS) : color(vertex.component))
           .on('click', (event, vertex) => {
             ipcRenderer.invoke('documents-provider', {
