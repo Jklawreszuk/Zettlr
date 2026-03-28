@@ -389,6 +389,7 @@ function startSimulation (): void {
           .append('circle')
           .attr('r', radius.value)
           .attr('fill', (vertex, _value) => (vertex.isolate) ? color(ISOLATES_CLASS) : color(vertex.component))
+          .call(drag(simulation.value!)) 
           .on('click', (event, vertex) => {
             ipcRenderer.invoke('documents-provider', {
               command: 'open-file',
@@ -444,6 +445,34 @@ function startSimulation (): void {
     )
 
   tippy(svg.select('#vertex-container').selectAll('circle').nodes() as any[])
+}
+
+function drag (simulation: d3.Simulation<any, undefined>) {
+  function dragstarted(event: any, d: any) {
+    if (!(Boolean(event.active))) { 
+      simulation.alphaTarget(0.3).restart()
+    }
+    d.fx = d.x
+    d.fy = d.y
+  }
+
+  function dragged (event: any, d: any) {
+    d.fx = event.x
+    d.fy = event.y
+  }
+
+  function dragended (event: any, d: any) {
+    if (!(Boolean(event.active))) {
+      simulation.alphaTarget(0)
+    }
+    d.fx = null
+    d.fy = null
+  }
+
+  return d3.drag<SVGCircleElement, any>()
+    .on('start', dragstarted)
+    .on('drag', dragged)
+    .on('end', dragended)
 }
 
 /**
