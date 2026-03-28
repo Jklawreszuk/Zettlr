@@ -740,11 +740,5 @@ body.linux {
       margin: 0px 0px 5px 0px;
     }
   }
-
-  &.dark {
-    #file-tree {
-      background-color: rgb(rgb(40, 40, 50));
-    }
-  }
 }
 </style>

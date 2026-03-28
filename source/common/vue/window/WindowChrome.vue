@@ -209,7 +209,7 @@ function handleDoubleClick (origin: 'titlebar'|'toolbar'): void {
   --grey-4: rgb(100, 100, 110);
   --grey-5: rgb( 80,  80,  90);
   --grey-6: rgb( 70,  70,  80);
-  --grey-7: rgb( 40,  40,  50);
+  --grey-7: rgb( 60,  60,  60);
 
   // Other colors
   --green-selection:       rgba(180, 240, 170, 0.8);
