@@ -71,7 +71,7 @@ const components = ref<string[]>([])
 const componentFilter = ref('') // Can hold the name of a specific component
 const highlightFilter = ref('')
 const includeIsolates = ref(true)
-const showLabels = ref(false)
+const showLabels = ref(true)
 // These two variables are required to enable scrolling, they mark an
 // offset to which the viewport will be relatively positioned
 const offsetX = ref(0)
