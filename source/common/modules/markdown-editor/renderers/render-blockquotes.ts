@@ -90,7 +90,10 @@ export const renderBlockquotes = [
       display: 'block',
       borderLeft: 'solid 0.25em',
       paddingLeft: '0.5em',
-      marginLeft: '0.25em'
+      marginLeft: '0.25em',
+      paddingTop: '0.25em',
+      paddingBottom: '0.25em',
+      backgroundColor: 'var(--grey-0)'
     },
     '.blockquote-wrapper .cm-line': {
       opacity: '0.7',
@@ -99,6 +102,9 @@ export const renderBlockquotes = [
       // the paddingLeft set by the blockquote-wrapper.
       paddingLeft: 'revert !important',
       textIndent: 'revert !important'
+    },
+    '&dark .blockquote-wrapper': {
+      backgroundColor: 'var(--grey-7)'
     }
   })
 ]
