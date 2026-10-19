@@ -29,7 +29,7 @@ import EventEmitter from 'events'
 // CodeMirror imports
 import { Decoration, type DecorationSet, EditorView } from '@codemirror/view'
 import {
-  type EditorSelection,
+  EditorSelection,
   EditorState,
   Text,
   type StateEffect,
@@ -81,7 +81,6 @@ import { addNewFootnote } from './commands/footnotes'
 
 // Utilities
 import { copyAsHTML, pasteAsPlain } from './util/copy-paste-cut'
-import openMarkdownLink from './util/open-markdown-link'
 import { highlightRangesEffect } from './plugins/highlight-ranges'
 
 import safeAssign from '@common/util/safe-assign'
@@ -95,13 +94,16 @@ import {
 } from './plugins/remote-doc'
 import { markdownToAST } from '../markdown-utils'
 import { countField, updateWordCountEffect } from './plugins/statistics-fields'
-import type { SyntaxNode } from '@lezer/common'
-import { darkModeEffect } from './theme/dark-mode'
+import { useDarkModeEditor, darkModeEffect } from './theme/dark-mode'
 import { editorMetadataFacet } from './plugins/editor-metadata'
 import { projectInfoUpdateEffect, type ProjectInfo } from './plugins/project-info-field'
 import { moveSection } from './commands/move-section'
 import { parsePandocAttributes } from 'source/common/pandoc-util/parse-pandoc-attributes'
 import { closeSearchPanel, openSearchPanel, searchPanelOpen } from '@codemirror/search'
+import { clickListeners } from './plugins/click-listeners'
+import { type SnippetRecord } from './autocomplete/snippets'
+import { type CitationRecord } from './autocomplete/citations'
+import { type FileRecord } from './autocomplete/files'
 
 export interface DocumentWrapper {
   path: string
@@ -169,7 +171,7 @@ export interface EditorViewPersistentState {
    * A scroll snapshot from the editor. Used to properly restore the scroll
    * position.
    */
-  scrollSnapshot: StateEffect<any>
+  scrollSnapshot: StateEffect<unknown>
   /**
    * A selection object. Used to properly restore the cursor position and any
    * selections within the editor.
@@ -338,77 +340,14 @@ export default class MarkdownEditor extends EventEmitter {
           }
         }
       },
-      domEventsListeners: {
-        mousedown (event, view) {
-          const cmd = event.metaKey && process.platform === 'darwin'
-          const ctrl = event.ctrlKey && process.platform !== 'darwin'
-          if (!cmd && !ctrl) {
-            return false
-          }
-
-          const pos = view.posAtCoords({ x: event.clientX, y: event.clientY })
-          if (pos === null) {
-            return false
-          }
-
-          const nodeAt = syntaxTree(view.state).resolve(pos, 0)
-
-          // Both plain URLs as well as Zettelkasten links and tags are
-          // implemented on the syntax tree.
-          if (nodeAt.type.name === 'URL') {
-            // We found a plain link!
-            const url = view.state.sliceDoc(nodeAt.from, nodeAt.to)
-            if (url.startsWith('[[') && url.endsWith(']]')) {
-              editorInstance.emit('zettelkasten-link', url.substring(2, url.length - 2))
-            } else {
-              openMarkdownLink(url, view)
-            }
-            event.preventDefault()
-            return true
-          } else if ([ 'ZknLinkContent', 'ZknLinkTitle', 'ZknLinkPipe', 'ZknLinkMark' ].includes(nodeAt.type.name)) {
-            // We found a Zettelkasten link!
-            event.preventDefault()
-            // In these cases, nodeAt.parent is always a ZettelkastenLink
-            const contentNode = nodeAt.parent?.getChild('ZknLinkContent')
-            if (contentNode != null) {
-              const linkContents = view.state.sliceDoc(contentNode.from, contentNode.to)
-              editorInstance.emit('zettelkasten-link', linkContents)
-            }
-            return true
-          } else if (nodeAt.type.name === 'ZknTag') {
-            // A tag!
-            const mark = nodeAt.getChild('ZknTagMark')
-            const tagContents = view.state.sliceDoc(mark ? mark.to : nodeAt.from, nodeAt.to)
-            editorInstance.emit('zettelkasten-tag', tagContents)
-            event.preventDefault()
-            return true
-          }
-
-          // Lastly, the user may have clicked somewhere in a link. However,
-          // since the link description can take various inline elements, we
-          // have to recursively move up the tree until we find a 'Link' element
-          // or abort if we reach the top
-          let currentNode: SyntaxNode|null = nodeAt
-          while (currentNode !== null && currentNode.name !== 'Link') {
-            currentNode = currentNode.parent
-          }
-
-          if (currentNode !== null) {
-            // We have a link
-            const urlNode = currentNode.getChild('URL')
-            if (urlNode !== null) {
-              const url = view.state.sliceDoc(urlNode.from, urlNode.to)
-              if (url.startsWith('[[') && url.endsWith(']]')) {
-                editorInstance.emit('zettelkasten-link', url.substring(2, url.length - 2))
-              } else {
-                openMarkdownLink(url, view)
-              }
-              event.preventDefault()
-              return true
-            }
-          }
+      domEventsListeners: clickListeners({
+        onWikiLink (url) {
+          editorInstance.emit('zettelkasten-link', url)
+        },
+        onTag (tag) {
+          editorInstance.emit('zettelkasten-tag', tag)
         }
-      }
+      })
     }
 
     switch (type) {
@@ -442,22 +381,47 @@ export default class MarkdownEditor extends EventEmitter {
 
     this._instance.setState(state)
 
+    // If a persistent state has been passed to the function, we can restore a
+    // set of information, such as fold regions or editor selections to
+    // reconstruct a document after, e.g., switching tabs or reloading it.
     if (persistentState !== undefined) {
-      // Now that the correct document has been loaded, there will be content
-      // and we can restore the persisted information.
       const { scrollSnapshot, selection, foldedRanges } = persistentState
+      const docLength = this._instance.state.doc.length
 
-      const effects: StateEffect<any>[] = [scrollSnapshot]
+      const effects: StateEffect<unknown>[] = [scrollSnapshot]
 
       const cursor = foldedRanges.iter()
-      while (cursor.value) {
-        effects.push(foldEffect.of({ from: cursor.from, to: cursor.to }))
+      while (cursor.value !== null) {
+        if (cursor.from <= docLength && cursor.to <= docLength) {
+          effects.push(foldEffect.of({
+            from: cursor.from,
+            to: cursor.to
+          }))
+        }
         cursor.next()
       }
 
-      this._instance.dispatch({ selection, effects })
-    }
+      const oldMainRange = selection.ranges[selection.mainIndex]
 
+      // Remove ranges that now lie outside of the new document's length
+      // (primarily relevant if a document has been changed externally).
+      const newRanges = selection.ranges.filter(
+        ({ anchor, head }) => anchor <= docLength && head <= docLength
+      )
+
+      const idx = newRanges.indexOf(oldMainRange)
+
+      // Either restore the selection if some ranges were still valid, using
+      // either the existing main index, or resetting it, or create a new
+      // pristine selection set to the document start if all ranges were
+      // invalid.
+      const restoredSelection = newRanges.length > 0
+        ? EditorSelection.create(newRanges, idx > -1 ? idx : 0)
+        : EditorSelection.single(0)
+
+      this._instance.dispatch({ selection: restoredSelection, effects })
+    }
+    
     // Ensure the theme switcher picks the state change up; this somehow doesn't
     // properly work after the document has been mounted to the DOM.
     this._instance.dispatch({ effects: configUpdateEffect.of(this.config) })
@@ -501,7 +465,7 @@ export default class MarkdownEditor extends EventEmitter {
    * a setting has changed that requires extensions to be fully reloaded.
    */
   async reload (): Promise<void> {
-    await this.loadDocument()
+    await this.loadDocument(this.persistentState)
   }
 
   /**
@@ -607,11 +571,13 @@ export default class MarkdownEditor extends EventEmitter {
   private onConfigUpdate (newOptions: Partial<EditorConfiguration>): void {
     const inputModeChanged = newOptions.inputMode !== undefined && newOptions.inputMode !== this.config.inputMode
     const darkModeChanged = newOptions.darkMode !== undefined && newOptions.darkMode !== this.config.darkMode
+    const editorModeChanged = newOptions.darkModeEditor !== undefined && newOptions.darkModeEditor !== this.config.darkModeEditor
     const themeChanged = newOptions.theme !== undefined && newOptions.theme !== this.config.theme
 
     // Third: The input mode, if applicable
     if (inputModeChanged) {
       if (newOptions.inputMode === 'emacs') {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         this._instance.dispatch({ effects: inputModeCompartment.reconfigure(emacs()) })
       } else if (newOptions.inputMode === 'vim') {
         this._instance.dispatch({ effects: inputModeCompartment.reconfigure(vimPlugin()) })
@@ -621,12 +587,15 @@ export default class MarkdownEditor extends EventEmitter {
     }
 
     // Fourth: Switch theme, if applicable
-    if (darkModeChanged || themeChanged) {
+    if (darkModeChanged || editorModeChanged || themeChanged) {
       const themes = getMainEditorThemes()
+
+      const darkMode = newOptions.darkMode ?? this.config.darkMode
+      const darkModeEditor = newOptions.darkModeEditor ?? this.config.darkModeEditor
 
       this._instance.dispatch({
         effects: darkModeEffect.of({
-          darkMode: newOptions.darkMode,
+          darkMode: useDarkModeEditor(darkMode, darkModeEditor),
           ...themes[newOptions.theme ?? this.config.theme]
         })
       })
@@ -640,7 +609,7 @@ export default class MarkdownEditor extends EventEmitter {
    *
    * @return  {any}           The value of the key
    */
-  getOption (name: string): any {
+  getOption (name: string) {
     const config = this._instance.state.field(configField)
     if (name in config) {
       return config[name as keyof EditorConfiguration]
@@ -740,26 +709,29 @@ export default class MarkdownEditor extends EventEmitter {
    * @param   {Object}  database  The show-hint-addon compatible database
    */
   setCompletionDatabase (type: 'tags', database: TagRecord[]): void
-  setCompletionDatabase (type: 'citations', database: Array<{ citekey: string, displayText: string }>): void
-  setCompletionDatabase (type: 'snippets', database: Array<{ name: string, content: string }>): void
-  setCompletionDatabase (type: 'files', database: Array<{ filename: string, displayName: string, id: string }>): void
-  setCompletionDatabase (type: string, database: any): void {
+  setCompletionDatabase (type: 'citations', database: CitationRecord[]): void
+  setCompletionDatabase (type: 'snippets', database: SnippetRecord[]): void
+  setCompletionDatabase (type: 'files', database: FileRecord[]): void
+  setCompletionDatabase (
+    type: 'tags'|'citations'|'snippets'|'files',
+    database: TagRecord[]|CitationRecord[]|SnippetRecord[]|FileRecord[]
+  ): void {
     switch (type) {
       case 'tags':
-        this.databaseCache.tags = database
+        this.databaseCache.tags = database as TagRecord[]
         this._instance.dispatch({ effects: tagsUpdate.of(database as TagRecord[]) })
         break
       case 'citations':
-        this.databaseCache.citations = database
-        this._instance.dispatch({ effects: citekeyUpdate.of(database as Array<{ citekey: string, displayText: string }>) })
+        this.databaseCache.citations = database as CitationRecord[]
+        this._instance.dispatch({ effects: citekeyUpdate.of(database as CitationRecord[]) })
         break
       case 'snippets':
-        this.databaseCache.snippets = database
-        this._instance.dispatch({ effects: snippetsUpdate.of(database as Array<{ name: string, content: string }>) })
+        this.databaseCache.snippets = database as SnippetRecord[]
+        this._instance.dispatch({ effects: snippetsUpdate.of(database as SnippetRecord[]) })
         break
       case 'files':
-        this.databaseCache.files = database
-        this._instance.dispatch({ effects: filesUpdate.of(database as Array<{ filename: string, displayName: string, id: string }>) })
+        this.databaseCache.files = database as FileRecord[]
+        this._instance.dispatch({ effects: filesUpdate.of(database as FileRecord[]) })
         break
     }
   }

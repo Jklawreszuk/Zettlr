@@ -1,5 +1,328 @@
 # Upcoming
 
+## Deprecation: macOS 12 and Ubuntu 17.04 no longer supported
+
+This release updates Electron, Zettlr's underlying application framework, to
+version 44. This means that Zettlr will no longer run on macOS 12 or Ubuntu
+17.04 or earlier. If you run such a system, please consider updating your
+computer to continue using Zettlr.
+
+## GUI and Functionality
+
+- **Feature**: Zettlr now correctly renders images that have been defined using
+  the reference-style variant. So instead of only rendering images in the form
+  `![alt text](url)`, it can now also render reference style images in the form
+  `![alt text][reference]`, with the reference being defined elsewhere (#663).
+- Fixed an issue where a URL in an image caption would be improperly treated as
+  the image source (#6594).
+- Fixed an issue where toggling a task mark would scroll the viewport back to
+  the cursor position. Now, the viewport does not scroll when a task mark is
+  toggled, though the cursor position is retained (#6603).
+- Fixed an issue that would cause jumping of the editor content upon externally
+  modifying a file (#6531; #6543).
+- Fixed an issue that caused excessive "failed to check for updates" errors
+  (#6574).
+- Fixed an issue preventing files with non-lowercase extensions from showing up
+  and being correctly treated by Zettlr (#6613).
+- Fixed a bug that would cause the statusbars of split views visible on top of
+  distraction-free views when using a split-view layout (#6581).
+
+## Under the Hood
+
+- Update Electron to `v44.7.0`. This drops macOS 12 and Ubuntu 17.04.
+- Update Pandoc to `v3.12.1`. This changes how admonitions/alerts are rendered
+  and may require updates to your custom template CSS for HTML exports.
+- Upgrade Mermaid to `v12.1.0`.
+- Centralized update check logic.
+- Fully switched the update provider from the outdated `got` dependency to both
+  pure `fetch` (where necessary) or `ky` (where convenient).
+- Move the link preview generation to `ky`.
+- Fully remove all dependencies on `got`, and remove the module entirely.
+- Ensure VS Code uses the workspace's TypeScript version instead of the built-in
+  one to avoid issues where the linter sees different isues than VS Code.
+
+# 4.8.0
+
+## Admonitions
+
+After more than six years in the making, we are proud to announce admonitions as
+a new feature for Zettlr. The app now supports the more and more common syntax
+that GitHub and other Markdown editors already support, using Blockquotes with a
+custom header. You can create `note`s, `tip`s, `warning`s, `important` blocks,
+and `caution` blocks like so:
+
+```markdown
+> [!note] This is the note's title
+> This is the content of the note.
+```
+
+The title after the keyword is optional, and you can use both uppercase keywords
+and lowercase keywords.
+
+Zettlr comes with a built-in renderer so that you can immediately see what the
+admonitions might look like upon export (note that the final styling depends on
+the export option chosen and support for this type of element). The renderer can
+be enabled or disabled exactly like the existing renderers.
+
+When you "copy" a selection that contains an admonition using the "with style"
+option, Zettlr will transform the admonition correctly, but whether the
+admonition retains its styles depend on the application into which you paste
+this code.
+
+Note that admonition support upon exporting requires the `alerts` extension. You
+can enable it manually in your export profile configuration, or enforce support
+(where available) via the export settings.
+
+## Deprecation Note: Dropping Support for OS Versions in Next Release
+
+This is the last Zettlr release shipping with Electron version 43. The next
+release will switch to Electrion version 44, which drops support for the
+following operating systems:
+
+* Ubuntu 17.04 or earlier
+* macOS 12 (Monterey)
+
+Please make sure to update your operating system before the next version of
+Zettlr ships if you are affected by this change.
+
+## GUI and Functionality
+
+- **Feature**: Admonitions are here! Zettlr now supports a broad range of
+  admonitions (sometimes also referred to as alerts or callouts). You can use
+  admonitions to emphasize certain content in your documents using Blockquote
+  syntax with a special header (see PR. #6497 for details). This closes a long-
+  standing feature request (#532). Some notes:
+  * Admonitions come with support of five keywords: `note` (gray), `tip`
+    (green), `warning` (yellow), `important` (purple), and `caution` (red).
+  * Zettlr supports custom titles for admonitions (full compatibility with other
+    popular Markdown editors).
+  * The app ships with a renderer for admonitions that you can turn on and off
+    just like any other renderer.
+  * Note that, to make admonitions survive exports, you will need to enable the
+    `alerts`-extension of Pandoc in the `reader` of the profile in question.
+  * Zettlr will use similar HTML-syntax when you copy text with admonitions
+    using the "Copy with Styles" option, but whether this survives pasting into
+    other applications depends on support on their side.
+- **Feature**: You can now choose whether you want to automatically accept the
+  selected autocomplete suggestion when pressing `Tab`, `Enter`, both, or
+  disable automatic accepting entirely (#6485).
+- **Change**: The old `mark` setting has been replaced by a new settings
+  category that enforces support for several Pandoc extensions during export. If
+  you have disabled the `mark` support in the import/export settings previously,
+  you will need to disable this again after updating Zettlr.
+- **Change**: Fixed a fundamental issue with the full-text search that would
+  turn **AND**-searches implicitly into **OR** searches. If you relied on how
+  the full-text search actually worked, and not how it was described in the
+  documentation, you will now have to explicitly add pipe-operators (`|`)
+  between your search terms to mark them as alternatives. By default, the full-
+  text search now requires all operators separated by a space to be present in a
+  file to be considered a valid result (#6517).
+- **New Translation**: Zettlr now ships with an additional language:
+  Azerbaijani. See PR #6548 for details.
+- Improved the custom title bar style on both Linux (if native appearance is
+  turned off) and Windows. Here's what changed:
+  1. The logo is now an actual element rather than background, and has been
+     scaled down to better fit into the menu bar.
+  2. The window controls now use a transparent background and a light/dark color
+     depending on which theme the app is currently using.
+  3. Improved the spacing around the menu items to make them less menacing.
+- Fixed the about window's debug tab: No more horizontal scrolling, and the
+  `PATH`-variable is properly split into segments.
+- Fixed some alignment issues with custom symbols on toolbar buttons; now the
+  buttons should all be properly centered.
+- Fixed an issue where in some places instead of showing you a proper file
+  title, the app would default to only showing you the filename, and neither a
+  heading or YAML title, if you specified it as such. Now, the logic has been
+  centralized and everywhere you expect a proper file title it should now show
+  you one (see #6471).
+- Set default mode for LanguageTool to `standard` for new installations. If you
+  prefer `picky`, simply set it accordingly.
+- Fixed an issue where configuration changes emitted from the onboarding dialog
+  for new users were one-way-only, with no way to undo the changes. This has now
+  been changed: the buttons accurately reflect the actual configuration state,
+  and pressing the buttons multiple times toggles between the two sets of
+  suggested settings (#6429).
+- Update translations:
+  - `ko-KO` (#6478).
+  - `de-DE`.
+  - `ja-JP` (#6480).
+  - `ca-ES` (#6530).
+  - `pt-BR` (#6537).
+  - `tr-TR` (#6533).
+  - `az-AZ` (#6548).
+- Renamed "Remove line breaks" to "Remove excess line breaks."
+- Fixed an issue in full text search where multiple search terms separated by
+  whitespace would use an 'OR' operator rather than the documented 'AND'
+  operator. Now, search terms separated by whitespace correctly use the 'AND'
+  operator (#6517).
+- Fixed an issue that prevented inserting a new row when the cursor is placed in
+  the final row of the table (#6512; #6513).
+
+## Under the Hood
+
+- Update Electron to `v43.6.0`.
+- Zettlr now checks whether a Pandoc extension it seeks to enable during export
+  is actually supported by the reader to avoid errors when, e.g., using the
+  `commonmark` reader which does not support the `mark` extension.
+- Updates to the translations are now deterministic (#6538). This causes minimal
+  diffs between iterations and should also reduce the risks for merge conflicts
+  between open translation PRs and POT update PRs.
+
+# 4.7.0
+
+## GUI and Functionality
+
+- **Feature**: Custom shortcuts are here. You can now customize many of the
+  available shortcuts and assign them to your likings. This also includes the
+  various text transformations that we introduced in version 3.6.0 so that you
+  can bind frequently used ones to a handy shortcut. The feature comes with all
+  the standards of custom shortcuts, including an interactive shortcut recording
+  that visualizes which keys will become part of the shortcuts as you type them,
+  a reset function to restore the default, and an automated conflict detection
+  that lets you know whether a shortcut you have provided might conflict with
+  another one.
+- **Feature**: You can now set the editor theme to use a light or dark
+  appearance independent of the app appearance (#5851).
+- **Feature**: You can now click a long-running-task notification for both
+  projects and single files to directly open the corresponding file.
+- **Feature**: Popovers can now be closed with a quick press on `Escape`.
+- **Change**: Changed the layout of the project properties. Now the custom
+  templates and CSL section are placed on the general tab, while the export
+  profile picker has moved to its own tab. This gives the custom options more
+  visibility and provides a better grouping of the options.
+- Fixed a regression from 4.6.1 where the full-text search would not search any
+  open standalone files (#6387).
+- Fixed an issue on macOS where opening a file from Finder with no open main
+  window would not automatically open one (#6391).
+- Update translations:
+  - `ja-JP` (#6390).
+  - `de-DE` (#6449).
+  - `tr-TR` (#6450).
+- Fix snippets syntax and improve nested support (#6389).
+- Fixed a bug that would cause Zettlr to replace a magic quote with a regular
+  quote instead of deleting the text if some text was selected that happened to
+  be adjacent to a magic quote.
+- The Table of Contents title in the sidebar is now properly reset (#6397).
+- Improve toolbar styling (#6418).
+- Fixed a linter warning for footnotes without spaces (#6434).
+- Updated French translations (#6430).
+- Fixed a regression that causes windows to briefly flash white when macOS
+  vibrancy is disabled and the app is set to dark mode (#6438).
+- Fixed `s`/`S` shortcuts in vim mode (#6445).
+- Fixed a regression from the previous version that caused timeouts when using a
+  local LanguageTool integration with very long texts after the switch from
+  `got` to `ky`.
+- Fixed an issue where empty Pandoc spans would crash the span renderer (#6448).
+- Fixed an issue where the label of the "open automatically" checkbox in the
+  export popover would not be clickable.
+- Fixed a visual glitch when running multiple full-text searches in between
+  showing and hiding the search pane (#6454).
+- Fixed bold and italic styling (#6472).
+- Fix an issue leading to buggy interactions between snippets and the typewriter
+  mode (#6473).
+
+## Under the Hood
+
+- Update Pandoc to `v3.10.1`.
+- Update Electron to `v43.1.0`.
+- Zettlr now additionally trusts system certificates when making network
+  connections, meaning that custom TLS certificates can be used, e.g., for
+  corporate firewalls (#6006; #5271).
+- Added a new Vue directive, `v-focus` that can be applied to any element in a
+  Vue component and that will focus the element as soon as it is mounted to the
+  DOM.
+- Removed deprecated path check for the app.
+- Improve performance of the editor (#6388).
+- Improved handling of invalid dates in the statistics provider (#6433).
+- Remove superfluous search logging (#6401).
+- Refactor `posInNode` utility to `nodeAtPos` and align documentation with
+  behavior (#6399).
+- Update various (incl. transitive) dependencies.
+- Remove fix for an old `archiver` dependency.
+- Refactor TextPack export to match new `archiver` API.
+- Remove remnant `.tern-project` file.
+
+# 4.6.0
+
+## GUI and Functionality
+
+- **Feature**: Allow changing the trigger character for snippet (and emoji)
+  autocomplete. Until now, this was hard-coded to `:` (which is still the
+  default). However, since that interferes with the way French speakers use the
+  colon character (`Pour exemple : cette.`), we now allow different trigger
+  characters, relieving the colon where necessary. Currently supported are `/`
+  and `%` as alternatives (#5185; #6325).
+- **Feature**: The tutorial is now also available in Portuguese for new users
+  (#6373).
+- **Feature**: The "Remove line breaks" transformation in the editor is now also
+  available via the keyboard shortcut `Cmd/Ctrl-Alt-J` (#5913).
+- **Change**: This release brings many improvements to the full text search
+  (#6339):
+  - The full text search was completely rewritten to improve performance by 50%
+    to 100%.
+  - The autocompletes for both previous searches and the restrict-to-folder
+    functionalities have been drastically improved and work reliably (#5686).
+  - Ability to switch between case-insensitive and case-sensitive searches.
+  - Improvements in the presentation and layout of search results.
+- **Change**: On macOS, the default setting for window vibrancy is now off. This
+  makes the file manager opaque, but improves visual design with the new sticky
+  folder headers.
+- Add Elixir syntax highlighting for code blocks; identifiers: `elixir`, `ex`,
+  or `exs` (#6368).
+- Fixed missing click handlers for clicking links in tables (#4694).
+- Fixed an issue that would sometimes open the same link twice.
+- The file manager now uses tabular digits for displaying numbers in filenames.
+- Fixed an issue where code elements had a background color that overlaid the
+  selection (#6328).
+- Fixed a wrong font selection for comments.
+- Fixed strikethrough-elements no longer being stricken-through (#6330).
+- Fixed triple-clicks within tables to select entire table cells (#6344; #6100).
+- Add "Curl quotes" text transform to convert straight quotes to curly (smart)
+  quotes, the inverse of the existing "Straighten quotes" transform (#6259).
+- The main window's title now includes the current active file's title. This
+  allows automation that depends on the window title (#6283).
+- The table of contents now clears out when the last file of the editor is
+  closed (#6251).
+- Allow `Escape` to close the search panel regardless of whether it is currently
+  focused (#2970).
+- Moved the editor "Indentation," "Font size," and "Autocomplete" settings into
+  their own preferences groups.
+- The menubar on Windows is no longer styled using the system's accent color to
+  reduce potential distractions for users.
+- Update Brazilian (`pt-BR`) translations (#6348).
+- Fixed TableEditor swap rows/columns commands on macOS. Until now, they were
+  mapped to `Ctrl+Shift+Arrow`, which was misaligned with the main keymap.
+- Fixed an issue in the TableEditor where adding new rows could increase the
+  amount of surrounding whitespace in the newly inserted rows (#6369).
+- Fixed the alignment command for the TableEditor which previously would clear
+  out the entire column, if the column had no alignment set.
+- Fixed a regression from the previous version that disabled the references list
+  CSS (#6380).
+- Fixed a regression from the previous version that could lead to visual
+  artifacts in the thin and expanded file manager modes when switching files
+  (#6385).
+- Fixed a long-standing bug that would cause the application to go out of sync
+  with the operating system's UI theme on macOS when the application is set to
+  "follow the OS" in terms of UI theme, but the user has manually changed the
+  theme to light or dark. In that case, the app would lose synchronization with
+  the macOS theme source, causing the auto-switching mechanism to fail when the
+  operating system's UI theme changes.
+
+## Under the Hood
+
+- Upgrade Electron to `v42.3.3`.
+- Upgrade Pandoc to `v3.10`.
+- Pinned a transitive dependency of electron forge, `yauzl` to fix a bug on
+  newer Node versions (context: https://github.com/electron/forge/issues/4277).
+- Migrate the `openAttachment` utility from `got` to `ky`.
+- Migrate the LanguageTool API utility from `got` to `ky`.
+- Enforce proper comment styling.
+- The `StartupWMClass` has been switched back to lowercase, since apparently the
+  build step has correctly reverted the binary name to lowercase on Linux.
+- Handle symbolic links in chokidar watcher explicitly.
+
+# 4.5.0
+
 ## GUI and Functionality
 
 - **Feature**: Long-running background tasks are now visually indicated with a

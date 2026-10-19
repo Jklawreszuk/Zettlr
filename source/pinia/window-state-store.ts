@@ -17,10 +17,11 @@
 import { defineStore } from 'pinia'
 import type { DocumentInfo } from 'source/common/modules/markdown-editor'
 import type { ToCEntry } from 'source/common/modules/markdown-editor/plugins/toc-field'
-import { ref, type Ref } from 'vue'
-import type { SearchResultWrapper } from 'source/types/common/search'
+import { computed, ref, type Ref } from 'vue'
 import { type WritingTarget } from '@providers/targets'
 import type { AssetsProviderIPCAPI } from 'source/app/service-providers/assets'
+import type { SearchResultWrapper } from 'source/win-main/GlobalSearch.vue'
+import { type SnippetRecord } from 'source/common/modules/markdown-editor/autocomplete/snippets'
 
 const ipcRenderer = window.ipc
 
@@ -51,13 +52,22 @@ export const useWindowStateStore = defineStore('window-state', () => {
   const distractionFreeMode = ref<undefined|string>(undefined)
   const activeDocumentInfo = ref<undefined|DocumentInfo>(undefined)
   const tableOfContents = ref<ToCEntry[]|undefined>(undefined)
-  const snippets = ref<Array<{ name: string, content: string }>>([])
+  const snippets = ref<SnippetRecord[]>([])
   const writingTargets = ref<WritingTarget[]>([])
 
   /**
-   * This variable stores search results from the global search
+   * SEARCH RESULTS FUNCTIONALITY
    */
   const searchResults = ref<SearchResultWrapper[]>([])
+  const maxSearchResultWeight = computed(() => {
+    const allWeights = searchResults.value.map(r => r.weight)
+    return Math.max(...allWeights)
+  })
+
+  function addSearchResult (result: SearchResultWrapper) {
+    searchResults.value.push(result)
+    searchResults.value.sort((a, b) => b.weight - a.weight)
+  }
 
   // Snippets
   ipcRenderer.on('assets-provider', (event, what: string) => {
@@ -93,6 +103,8 @@ export const useWindowStateStore = defineStore('window-state', () => {
     activeDocumentInfo,
     tableOfContents,
     searchResults,
+    addSearchResult,
+    maxSearchResultWeight,
     snippets,
     writingTargets,
     isFullscreen
